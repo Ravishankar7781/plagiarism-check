@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlagCheck</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --text:#1c2024; --muted:#5f6b76; --line:#e2e6ea; --accent:#2f5bd3; --accent-fg:#fff;
+  --copied:#fde2e1; --copied-line:#d93b30; --partial:#ffefd6; --partial-line:#d98b12;
+  --para:#fff7c2; --para-line:#b59600; --ai:#efe6ff; --ai-line:#7c4ddb; --fixed:#e1f5e6; --fixed-line:#2e8b4a;
+  --mark:#f7b9b4; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){ :root{
+  --bg:#121417; --panel:#1b1e22; --text:#e6e8eb; --muted:#99a3ad; --line:#2c3137; --accent:#6d8ff0; --accent-fg:#0d1117;
+  --copied:#4a2220; --copied-line:#ff7a70; --partial:#46341a; --partial-line:#f0a640;
+  --para:#403a14; --para-line:#e3c63a; --ai:#33284a; --ai-line:#b394ff; --fixed:#1d3a26; --fixed-line:#5fd38a;
+  --mark:#7a2f2a; --shadow:none;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:18px 24px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}
+header .sub{color:var(--muted);font-size:13px}
+main{max-width:1280px;margin:0 auto;padding:20px 16px 60px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;box-shadow:var(--shadow);margin-bottom:16px}
+h2{font-size:15px;margin:0 0 10px}
+textarea{width:100%;min-height:220px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;background:var(--bg);color:var(--text)}
+input[type=text]{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;background:var(--bg);color:var(--text);flex:1;min-width:200px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.opts{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0;font-size:14px}
+.opts label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.hint{color:var(--muted);font-size:12.5px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:7px 14px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600;padding:9px 22px}
+button:disabled{opacity:.5;cursor:default}
+.drop{border:1.5px dashed var(--line);border-radius:8px;padding:10px 14px;color:var(--muted);font-size:14px}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+#log{font:12.5px/1.5 ui-monospace,Consolas,monospace;color:var(--muted);white-space:pre-wrap;max-height:160px;overflow:auto;margin-top:10px}
+.err{color:var(--copied-line);font-weight:600}
+.warn{background:var(--partial);border-left:3px solid var(--partial-line);padding:8px 12px;border-radius:6px;margin:6px 0;font-size:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.tile .n{font-size:34px;font-weight:700;line-height:1.1}
+.tile .l{font-size:13px;color:var(--muted)}
+.tile .d{font-size:12.5px;color:var(--muted);margin-top:4px}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+#doc{white-space:pre-wrap;line-height:1.85;font-size:15.5px}
+.s{border-radius:3px;cursor:pointer;padding:1px 0}
+.s.copied{background:var(--copied);box-shadow:inset 0 -2px 0 var(--copied-line)}
+.s.partial{background:var(--partial);box-shadow:inset 0 -2px 0 var(--partial-line)}
+.s.paraphrased{background:var(--para);box-shadow:inset 0 -2px 0 var(--para-line)}
+.s.ai{background:var(--ai);box-shadow:inset 0 -2px 0 var(--ai-line)}
+.s.fixed{background:var(--fixed);box-shadow:inset 0 -2px 0 var(--fixed-line)}
+.s.sel{outline:2px solid var(--accent);outline-offset:1px}
+.s mark{background:var(--mark);color:inherit;border-radius:2px}
+.hide-plag .s.copied,.hide-plag .s.partial,.hide-plag .s.paraphrased{background:none;box-shadow:none}
+.hide-plag .s mark{background:none}
+.hide-ai .s.ai{background:none;box-shadow:none}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+#side{position:sticky;top:12px}
+.issue{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.quote{border-left:3px solid var(--line);padding:6px 10px;margin:8px 0;font-size:14px;background:var(--bg);border-radius:0 6px 6px 0}
+.rew{border-left-color:var(--fixed-line)}
+.src{font-size:13px;color:var(--muted);word-break:break-all}
+.src a{color:var(--accent)}
+ul.sources{list-style:none;padding:0;margin:0}
+ul.sources li{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:14px;align-items:baseline}
+ul.sources li:first-child{border-top:0}
+ul.sources .p{font-weight:700;min-width:52px}
+ul.sources .t{flex:1;min-width:0;overflow-wrap:anywhere}
+.kind{font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted);margin-left:6px}
+.signals{font-size:13px;margin:6px 0 0;padding-left:18px;color:var(--muted)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.hidden{display:none!important}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>PlagCheck</h1>
+  <span class="sub">Plagiarism + AI-writing checker with rewrite suggestions</span>
+  <span class="sub" id="status"></span>
+</header>
+<main>
+  <section id="inputCard" class="card">
+    <h2>Text or file to check</h2>
+    <textarea id="text" placeholder="Paste your essay, article or assignment here..."></textarea>
+    <div class="row" style="margin-top:10px">
+      <div class="drop" id="drop">Or drop a file here / <a href="#" id="pick">choose a file</a> (.docx, .pdf, .txt, .md, .html)
+        <input type="file" id="file" class="hidden" accept=".txt,.md,.docx,.pdf,.html,.htm,.tex,.rst">
+      </div>
+      <span id="fileName" class="hint"></span>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="optWeb" checked> Search the web</label>
+      <label><input type="checkbox" id="optLocal" checked> Compare with my indexed files</label>
+      <label><input type="checkbox" id="optClaude"> Rewrite with Claude</label>
+      <label><input type="checkbox" id="optReview"> Claude AI-writing second opinion</label>
+      <label>Depth <select id="optDepth"><option value="8">Quick</option><option value="15" selected>Normal</option><option value="30">Deep</option></select></label>
+    </div>
+    <div class="row">
+      <button class="primary" id="go">Check</button>
+      <span class="hint" id="claudeHint"></span>
+    </div>
+    <div id="log"></div>
+  </section>
+
+  <section id="results" class="hidden">
+    <div id="warnings"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="grid">
+      <div class="card">
+        <div class="toolbar">
+          <h2 style="margin:0">Your text <span class="hint">(click a highlighted sentence)</span></h2>
+          <div class="row" style="gap:10px;font-size:13px">
+            <label><input type="checkbox" id="showPlag" checked> plagiarism</label>
+            <label><input type="checkbox" id="showAi" checked> AI-style</label>
+          </div>
+        </div>
+        <div class="legend">
+          <span style="--c:var(--copied-line)">copied</span>
+          <span style="--c:var(--partial-line)">partly copied</span>
+          <span style="--c:var(--para-line)">close paraphrase</span>
+          <span style="--c:var(--ai-line)">sounds AI-written</span>
+          <span style="--c:var(--fixed-line)">rewritten</span>
+        </div>
+        <div id="doc"></div>
+        <div class="btns">
+          <button id="applyAll">Use all suggested rewrites</button>
+          <button id="copyText">Copy revised text</button>
+          <button id="dlText">Download revised .txt</button>
+          <button id="dlReport">Download report</button>
+          <button id="again">Check another</button>
+        </div>
+      </div>
+      <div id="side">
+        <div class="card" id="detail"><h2>Sentence details</h2><p class="hint">Click any highlighted sentence to see the matching source, why it was flagged, and a suggested rewrite.</p></div>
+        <div class="card"><h2>Matching sources</h2><ul class="sources" id="sources"></ul></div>
+        <div class="card" id="aiCard"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="indexCard" class="card">
+    <h2>Your own files (local index)</h2>
+    <p class="hint" style="margin-top:0">Add folders of papers, past submissions, books or notes. Every check is also compared against them. Works with very large collections: files are fingerprinted once and stored on this computer.</p>
+    <div class="row">
+      <input type="text" id="folder" placeholder="C:\Users\you\Documents\papers">
+      <button id="addFolder">Add folder</button>
+      <span class="hint" id="indexStatus"></span>
+    </div>
+  </section>
+</main>
+
+<script>
+const REPORT = /*__REPORT__*/null;
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let R = null, jobId = null, applied = {}, selected = null, fileObj = null;
+
+const LABEL = {copied:"Copied from a source", partial:"Partly copied", paraphrased:"Close paraphrase of a source", "ai-style":"Sounds AI-written"};
+const COLOR = {copied:"var(--copied-line)", partial:"var(--partial-line)", paraphrased:"var(--para-line)", "ai-style":"var(--ai-line)"};
+
+function issueOf(s){ return s.plag.type !== "none" ? s.plag.type : (s.ai && s.ai.flag ? "ai-style" : null); }
+
+async function api(path, body){
+  const r = await fetch(path, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+async function loadStatus(){
+  try{
+    const s = await api("/api/status");
+    $("status").textContent = `Web: ${s.search} \u00b7 Index: ${s.index_docs.toLocaleString()} files`;
+    $("optClaude").checked = s.claude_key; $("optReview").checked = false;
+    $("claudeHint").textContent = s.claude_key ? `Rewrites by Claude (${s.model})` :
+      "No ANTHROPIC_API_KEY found: rewrites use simple built-in rules.";
+    if (!s.pdf) $("pick").title = "PDF needs: pip install pypdf";
+  }catch(e){ $("status").textContent = "Server not reachable"; }
+}
+
+// ---------- file input
+$("pick").onclick = e => { e.preventDefault(); $("file").click(); };
+$("file").onchange = () => setFile($("file").files[0]);
+const drop = $("drop");
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => setFile(e.dataTransfer.files[0]));
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+function setFile(f){ if(!f) return; fileObj = f; $("fileName").innerHTML = `Selected: <b>${esc(f.name)}</b> (${(f.size/1024).toFixed(0)} KB) \u00b7 <a href="#" id="clearFile">remove</a>`;
+  $("clearFile").onclick = e => { e.preventDefault(); fileObj = null; $("fileName").textContent = ""; $("file").value = ""; }; }
+function b64(buf){ let s = "", b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
+
+// ---------- run check
+$("go").onclick = async () => {
+  const body = {web:$("optWeb").checked, local:$("optLocal").checked, rewrite:true, claude:$("optClaude").checked,
+                ai_review:$("optReview").checked, depth:+$("optDepth").value};
+  if (fileObj) body.file = {name:fileObj.name, data:b64(await fileObj.arrayBuffer())};
+  else body.text = $("text").value;
+  if (!body.file && body.text.trim().split(/\s+/).length < 10){ $("log").innerHTML = '<span class="err">Paste at least a few sentences, or choose a file.</span>'; return; }
+  $("go").disabled = true; $("log").textContent = "Starting\u2026";
+  try{
+    jobId = (await api("/api/check", body)).job;
+    poll(jobId, j => { applied = {}; selected = null; R = j.result; render(); });
+  }catch(e){ $("log").innerHTML = `<span class="err">${esc(e.message)}</span>`; $("go").disabled = false; }
+};
+
+function poll(id, onDone, logEl = $("log"), btn = $("go")){
+  const t = setInterval(async () => {
+    try{
+      const j = await api("/api/job/" + id);
+      logEl.textContent = j.log.slice(-12).join("\n");
+      logEl.scrollTop = logEl.scrollHeight;
+      if (j.status !== "running"){
+        clearInterval(t); btn.disabled = false;
+        if (j.status === "error") logEl.innerHTML += `\n<span class="err">${esc(j.error)}</span>`;
+        else onDone(j);
+      }
+    }catch(e){ clearInterval(t); btn.disabled = false; logEl.innerHTML += `\n<span class="err">${esc(e.message)}</span>`; }
+  }, 800);
+}
+
+// ---------- render results
+function pctColor(p, ai){ return p >= 40 ? "var(--copied-line)" : p >= 15 ? "var(--partial-line)" : "var(--fixed-line)"; }
+function tile(n, label, detail, color){
+  return `<div class="tile"><div class="n" style="color:${color}">${n}%</div><div class="l">${label}</div>
+    <div class="bar"><i style="width:${Math.min(100,n)}%;background:${color}"></i></div><div class="d">${detail}</div></div>`;
+}
+function render(){
+  $("results").classList.remove("hidden");
+  if (!REPORT){ $("inputCard").classList.add("hidden"); $("indexCard").classList.add("hidden"); }
+  const s = R.scores;
+  const flagged = R.sentences.filter(issueOf).length;
+  $("tiles").innerHTML =
+    tile(s.similarity, "Similarity (plagiarism)", `${s.exact}% exact match \u00b7 ${s.paraphrase}% close paraphrase`, pctColor(s.similarity)) +
+    tile(s.ai, "AI-writing estimate", esc(R.ai.label), s.ai >= 60 ? "var(--ai-line)" : s.ai >= 35 ? "var(--partial-line)" : "var(--fixed-line)") +
+    tile(s.original, "Original", `${R.word_count.toLocaleString()} words \u00b7 ${flagged} sentences to review`, s.original >= 85 ? "var(--fixed-line)" : s.original >= 60 ? "var(--partial-line)" : "var(--copied-line)");
+  $("warnings").innerHTML = R.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join("") +
+    (R.web ? `<div class="hint" style="margin-bottom:8px">Checked ${R.checked_at} \u00b7 ${R.web.queries} web searches via ${esc(R.web.provider)}, ${R.web.pages} pages read \u00b7 ${R.seconds}s${R.filename ? " \u00b7 " + esc(R.filename) : ""}</div>` : "");
+  renderDoc(); renderSources(); renderAi();
+  if (selected !== null) showDetail(selected);
+}
+
+function srcNum(id){ return R.sources.findIndex(x => x.id === id) + 1; }
+
+function renderDoc(){
+  const t = R.text; let html = "", pos = 0;
+  for (const s of R.sentences){
+    html += esc(t.slice(pos, s.start));
+    const iss = issueOf(s);
+    let cls = "s";
+    if (applied[s.i] !== undefined) cls += " fixed";
+    else if (iss === "ai-style") cls += " ai";
+    else if (iss) cls += " " + iss;
+    if (selected === s.i) cls += " sel";
+    let inner;
+    if (applied[s.i] !== undefined) inner = esc(applied[s.i]);
+    else {
+      inner = ""; let p = s.start;
+      for (const [a, b, src] of s.matches){ inner += esc(t.slice(p, a)) + `<mark title="Matches source [${srcNum(src)}]">${esc(t.slice(a, b))}</mark>`; p = b; }
+      inner += esc(t.slice(p, s.end));
+    }
+    html += iss || applied[s.i] !== undefined ? `<span class="${cls}" data-i="${s.i}">${inner}</span>` : inner;
+    pos = s.end;
+  }
+  html += esc(t.slice(pos));
+  $("doc").innerHTML = html;
+}
+$("doc").addEventListener("click", e => { const el = e.target.closest(".s"); if (el){ selected = +el.dataset.i; renderDoc(); showDetail(selected); } });
+$("showPlag").onchange = () => $("doc").classList.toggle("hide-plag", !$("showPlag").checked);
+$("showAi").onchange = () => $("doc").classList.toggle("hide-ai", !$("showAi").checked);
+
+function renderSources(){
+  const ul = $("sources");
+  if (!R.sources.length){ ul.innerHTML = `<li class="hint">No matching sources found.</li>`; return; }
+  ul.innerHTML = R.sources.map((x, k) => {
+    const link = /^https?:/.test(x.location) ? `<a href="${esc(x.location)}" target="_blank" rel="noopener noreferrer">${esc(x.location)}</a>` : esc(x.location);
+    return `<li><span class="p" style="color:${pctColor(x.percent * 2)}">${x.percent}%</span><span class="t">[${k + 1}] ${esc(x.title)}
+      <span class="kind">${x.kind === "local" ? "your file" : x.kind === "snippet" ? "search result" : "web page"}</span><div class="src">${link}</div></span></li>`;
+  }).join("");
+}
+
+function renderAi(){
+  const a = R.ai, names = {uniform_sentence_length:"Sentence lengths are very even", stock_phrases:"Stock AI phrases",
+    formal_transitions:"Many formal transitions (Moreover, Furthermore\u2026)", em_dashes:"Em dashes", no_contractions:"No contractions", flagged_sentences:"Share of AI-style sentences"};
+  let h = `<h2>AI-writing estimate: ${a.percent}%</h2><div><b>${esc(a.label)}</b></div><ul class="signals">` +
+    Object.entries(a.signals).map(([k, v]) => `<li>${names[k] || k}: ${Math.round(v * 100)}%</li>`).join("") + `</ul>`;
+  if (a.claude) h += `<h2 style="margin-top:12px">Claude's opinion: ${a.claude.ai_likelihood}%</h2><div>${esc(a.claude.verdict)}</div><ul class="signals">${a.claude.signals.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  h += `<p class="hint">${esc(a.note)}</p>`;
+  $("aiCard").innerHTML = h;
+}
+
+function showDetail(i){
+  const s = R.sentences[i], iss = issueOf(s), d = $("detail");
+  let h = `<h2>Sentence details</h2>`;
+  if (iss) h += `<div class="issue" style="color:${COLOR[iss]}">${LABEL[iss]}</div>`;
+  h += `<div class="quote">${esc(s.text)}</div>`;
+  if (s.plag.type !== "none"){
+    const src = R.sources.find(x => x.id === s.plag.source_id);
+    const pct = s.plag.type === "paraphrased" ? `${Math.round(s.plag.similarity * 100)}% of its key words match` : `${Math.round(s.plag.coverage * 100)}% of the words match exactly`;
+    h += `<div class="hint">${pct}${src ? ` (source [${srcNum(src.id)}])` : ""}:</div>`;
+    if (s.plag.excerpt) h += `<div class="quote">${esc(s.plag.excerpt)}</div>`;
+    if (src) h += `<div class="src">${/^https?:/.test(src.location) ? `<a href="${esc(src.location)}" target="_blank" rel="noopener noreferrer">${esc(src.title)}</a>` : esc(src.location)}</div>`;
+  }
+  if (s.ai && s.ai.reasons.length) h += `<div class="hint" style="margin-top:8px">AI-style signals: ${esc(s.ai.reasons.join("; "))}</div>`;
+  const sg = s.suggestion;
+  if (sg){
+    h += `<h2 style="margin-top:14px">Suggested rewrite <span class="hint">(${sg.by === "claude" ? "Claude" : "built-in rules"})</span></h2>`;
+    if (sg.rewrite) h += `<div class="quote rew" id="rewText" contenteditable="true" title="You can edit this before using it">${esc(sg.rewrite)}</div>`;
+    h += `<div class="hint">${esc(sg.note)}</div>`;
+    if (sg.warning) h += `<div class="warn">${esc(sg.warning)}</div>`;
+  }
+  if (!REPORT) h += `<div class="btns">${sg && sg.rewrite ? `<button id="useRew">Use this rewrite</button>` : ""}
+      <button id="rewAgain">${sg && sg.rewrite ? "Try another rewrite" : "Suggest a rewrite"}</button>
+      ${applied[i] !== undefined ? `<button id="undoRew">Undo</button>` : ""}</div>`;
+  else if (sg && sg.rewrite) h += `<div class="btns"><button id="useRew">Use this rewrite</button>${applied[i] !== undefined ? `<button id="undoRew">Undo</button>` : ""}</div>`;
+  d.innerHTML = h;
+  if ($("useRew")) $("useRew").onclick = () => { applied[i] = $("rewText").innerText.trim(); renderDoc(); showDetail(i); };
+  if ($("undoRew")) $("undoRew").onclick = () => { delete applied[i]; renderDoc(); showDetail(i); };
+  if ($("rewAgain")) $("rewAgain").onclick = async () => {
+    $("rewAgain").disabled = true; $("rewAgain").textContent = "Working\u2026";
+    try{
+      const ctx = R.text.slice(Math.max(0, s.start - 1500), s.end + 1500);
+      s.suggestion = await api("/api/rewrite", {text:s.text, issue:iss || "ai-style", source_excerpt:s.plag.excerpt || null, context:ctx, claude:$("optClaude").checked});
+    }catch(e){ s.suggestion = {rewrite:"", note:e.message, by:"rules"}; }
+    showDetail(i);
+  };
+}
+
+function revisedText(){
+  const t = R.text; let out = "", pos = 0;
+  for (const s of R.sentences){ out += t.slice(pos, s.start) + (applied[s.i] !== undefined ? applied[s.i] : t.slice(s.start, s.end)); pos = s.end; }
+  return out + t.slice(pos);
+}
+$("applyAll").onclick = () => { let n = 0; for (const s of R.sentences) if (s.suggestion && s.suggestion.rewrite){ applied[s.i] = s.suggestion.rewrite; n++; }
+  renderDoc(); if (!n) alert("No automatic rewrites available. Turn on 'Rewrite with Claude', or edit the flagged sentences yourself."); };
+$("copyText").onclick = async () => { await navigator.clipboard.writeText(revisedText()); $("copyText").textContent = "Copied"; setTimeout(() => $("copyText").textContent = "Copy revised text", 1500); };
+$("dlText").onclick = () => download(new Blob([revisedText()], {type:"text/plain"}), (R.filename ? R.filename.replace(/\.[^.]+$/, "") : "text") + "-revised.txt");
+$("dlReport").onclick = () => {
+  if (REPORT){ download(new Blob(["<!doctype html>" + document.documentElement.outerHTML], {type:"text/html"}), "plagcheck-report.html"); return; }
+  location.href = "/report/" + jobId;
+};
+$("again").onclick = () => { $("results").classList.add("hidden"); $("inputCard").classList.remove("hidden"); $("indexCard").classList.remove("hidden"); $("log").textContent = ""; window.scrollTo(0, 0); };
+function download(blob, name){ const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+
+// ---------- local index
+$("addFolder").onclick = async () => {
+  const folder = $("folder").value.trim(); if (!folder) return;
+  $("addFolder").disabled = true;
+  try{ const j = await api("/api/index", {folder}); poll(j.job, r => { $("indexStatus").textContent = `Done. Index holds ${r.result.total.toLocaleString()} files.`; loadStatus(); }, $("indexStatus"), $("addFolder")); }
+  catch(e){ $("indexStatus").innerHTML = `<span class="err">${esc(e.message)}</span>`; $("addFolder").disabled = false; }
+};
+
+if (REPORT){
+  R = REPORT; document.title = "PlagCheck report";
+  ["inputCard", "indexCard", "again"].forEach(id => $(id).classList.add("hidden"));
+  $("status").textContent = "Saved report";
+  render();
+} else loadStatus();
+</script>
+</body>
+</html>

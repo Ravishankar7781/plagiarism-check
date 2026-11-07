@@ -1,0 +1,14 @@
+# Local search index (your own files' fingerprints and text)
+plagcheck_index.db
+plagcheck_index.db-*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Reports and secrets
+*-plagcheck-report.html
+*-plagcheck-report.json
+.env
